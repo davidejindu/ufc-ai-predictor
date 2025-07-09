@@ -1,0 +1,7 @@
+# Ignore model artifacts and large binaries
+*.pkl
+/models/
+.DS_Store
+__pycache__/
+.env
+.venv/ 
