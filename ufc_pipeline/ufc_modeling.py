@@ -16,6 +16,7 @@ import re
 from sklearn.calibration import CalibratedClassifierCV, calibration_curve
 from sklearn.metrics import brier_score_loss
 import shap
+import joblib
 
 # --- Helper functions to parse height, weight, reach ---
 def parse_height(height_str):
@@ -332,8 +333,8 @@ fights_with_elo  = fights_with_elo.dropna(subset=feature_cols)
 # 2. impute every remaining numeric column (reach, age, etc.)
 from sklearn.impute import SimpleImputer
 num_cols = fights_with_elo.select_dtypes(include="number").columns
-imputer  = SimpleImputer(strategy="median")
-fights_with_elo[num_cols] = imputer.fit_transform(fights_with_elo[num_cols])
+main_imputer = SimpleImputer(strategy="median")
+fights_with_elo[num_cols] = main_imputer.fit_transform(fights_with_elo[num_cols])
 
 # --- Add new features to feature_cols ---
 # feature_cols = [
@@ -498,3 +499,23 @@ print(shap_df.loc[shap_df.index.intersection(win_features)])
 from sklearn.metrics import accuracy_score
 print(f"Test AUC: {auc:.3f}")
 print(f"Test Accuracy: {accuracy_score(y_test, xgb_best.predict(X_test)):.3f}") 
+
+# Save feature list for API
+import json
+with open('feature_list.json', 'w') as f:
+    json.dump(feature_cols, f)
+print('Feature list saved as feature_list.json') 
+
+joblib.dump(xgb_best, 'ufc_model.pkl')
+print('Trained model saved as ufc_model.pkl') 
+import json
+from sklearn.impute import SimpleImputer
+# Load the 27-feature list
+with open('feature_list.json', 'r') as f:
+    feature_list = json.load(f)
+# Re-fit the imputer on only these features
+main_imputer = SimpleImputer(strategy="median")
+main_imputer.fit(fights_with_elo[feature_list])
+print('Re-fitted imputer on columns:', feature_list)
+joblib.dump(main_imputer, 'ufc_scaler.pkl')
+print('Imputer saved as ufc_scaler.pkl (27 features)') 
