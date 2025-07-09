@@ -216,6 +216,3 @@ This project demonstrates end-to-end ML development skills. Feel free to fork an
 
 MIT License. See [LICENSE](LICENSE) for details.
 
----
-
-**Built with ❤️ for UFC fight prediction and ML engineering demonstration**
