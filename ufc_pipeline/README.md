@@ -14,6 +14,18 @@ This project demonstrates end-to-end ML development: from data scraping and feat
 - **Model Interpretability**: SHAP
 - **Data Storage**: CSV files
 
+## ⚡ Quick Setup
+
+> **Requires:** Python 3.10+
+>
+> **Tip:** Use a virtual environment to avoid polluting your global Python packages:
+>
+> ```bash
+> python -m venv .venv
+> source .venv/bin/activate
+> pip install -r requirements.txt
+> ```
+
 ## 📊 Accomplishments
 
 ### 1. Data Engineering & Feature Creation
@@ -29,7 +41,7 @@ This project demonstrates end-to-end ML development: from data scraping and feat
 ### 2. Model Development
 
 - **Trained and tuned an XGBoost classifier** for fight outcome prediction
-- **Achieved an AUC of ~0.61** on test data (as of model v1)
+- **Achieved an AUC of ~0.61** on test data (as of model v1, measured on a held-out set)
 - **Performed SHAP analysis** to interpret model predictions and identify key features
 - **Feature importance insights**: Opponent finish rate, Elo ratings, and total fights differential are top predictors
 
@@ -47,6 +59,7 @@ This project demonstrates end-to-end ML development: from data scraping and feat
   - Accepts JSON payloads with all required features
   - Handles missing values and feature ordering robustly
   - Returns both prediction probabilities and top SHAP feature attributions
+  - **Interactive docs:** http://localhost:8000/docs (Swagger UI)
 
 ### 5. Debugging & Robustness
 
@@ -82,6 +95,14 @@ python serve_api.py
 ```
 
 The API will be available at `http://localhost:8000` for local testing.
+
+> **Docker:** If you have Docker installed, you can run:
+>
+> ```bash
+> docker compose up
+> ```
+>
+> to spin up both FastAPI and the model server.
 
 ### Making Predictions
 
@@ -150,14 +171,14 @@ curl -X POST "http://localhost:8000/predict" \
 
 ```
 ufc_pipeline/
-├── ufc_modeling.py          # Main modeling script
-├── serve_api.py             # FastAPI server
-├── feature_list.json        # Required features
-├── ufc_model.pkl           # Trained XGBoost model (binary artifacts like this are usually stored in /models/ or a storage bucket, not committed to source)
-├── ufc_scaler.pkl          # Fitted imputer (see above)
-├── fighters.csv            # Fighter data
-├── fights.csv              # Fight data
-└── README.md               # This file
+├── ufc_modeling.py        # Main modeling script
+├── serve_api.py           # FastAPI server
+├── feature_list.json      # Required features (keep in sync with model)
+├── ufc_model.pkl          # Trained XGBoost model (binary artifacts like this are usually stored in /models/ or a storage bucket, not committed to source)
+├── ufc_scaler.pkl         # Fitted imputer (see above)
+├── fighters.csv           # Fighter data
+├── fights.csv             # Fight data
+└── README.md              # This file
 ```
 
 ## 🔧 Key Features
@@ -170,15 +191,17 @@ ufc_pipeline/
 
 ## 📊 Model Performance
 
-- **AUC Score**: 0.604 (as of model v1)
-- **Accuracy**: 54.2% (as of model v1)
+- **AUC Score**: 0.604 (as of model v1, held-out set)
+- **Accuracy**: 54.2% (as of model v1, held-out set)
 - **Dataset Size**: 18,283 fights
 - **Unique Fighters**: 3,535
 
 ## ⚠️ Data & Security Notes
 
-- **Dataset licensing**: Scraped data is for personal/educational use; check source site’s TOS before distributing.
+- **Dataset licensing**: Scraped data is for personal/educational use; check source site’s TOS before distributing. Data collected on <date>.
 - **Secrets**: Store credentials (API keys, etc.) in environment variables or a secrets manager. **Never commit secrets to source control.**
+- **Large binary artifacts**: Use `.gitignore` or Git LFS for `.pkl` files and model artifacts.
+- **Feature list**: Keep your feature list in sync with the model if you retrain or update features.
 
 ## 🤝 Contributing
 
@@ -191,7 +214,7 @@ This project demonstrates end-to-end ML development skills. Feel free to fork an
 
 ## 📝 License
 
-This project is for educational and portfolio purposes.
+MIT License. See [LICENSE](LICENSE) for details.
 
 ---
 
