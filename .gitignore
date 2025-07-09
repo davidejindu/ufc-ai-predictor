@@ -6,4 +6,5 @@ __pycache__/
 .env
 .venv/
 fights.csv
-fighters.csv 
+fighters.csv
+ufc_fighters_20.csv 
