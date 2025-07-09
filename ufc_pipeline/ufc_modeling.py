@@ -15,6 +15,7 @@ from xgboost import XGBClassifier
 import re
 from sklearn.calibration import CalibratedClassifierCV, calibration_curve
 from sklearn.metrics import brier_score_loss
+import shap
 
 # --- Helper functions to parse height, weight, reach ---
 def parse_height(height_str):
@@ -48,6 +49,20 @@ def parse_reach(reach_str):
         return float(reach_str)
     except:
         return None
+
+def compute_last_n_win_rate(df, fighter_col, date_col, result_col, n=10):
+    df = df.sort_values([fighter_col, date_col])
+    last_n_win_rate = []
+    for fighter_id, group in df.groupby(fighter_col):
+        results = group[result_col].tolist()
+        rates = []
+        for i in range(len(results)):
+            if i < n:
+                rates.append(np.nan)  # Not enough history
+            else:
+                rates.append(np.mean(results[i-n:i]))
+        last_n_win_rate.extend(rates)
+    return last_n_win_rate
 
 # --- Elo rating computation ---
 def compute_elo_ratings(df, k=32, base=1500):
@@ -299,6 +314,11 @@ fights_with_elo['total_fights_diff'] = fights_with_elo['f_total_fights'] - fight
 fights_with_elo['days_since_last_fight'] = fights_with_elo['f_days_since']
 fights_with_elo['five_fight_win_streak'] = fights_with_elo['f_win_streak5']
 
+# Add last-10 win rate features
+fights_with_elo['f_last10_win_rate'] = compute_last_n_win_rate(fights_with_elo, 'fighter_id', 'date', 'label', n=10)
+fights_with_elo['o_last10_win_rate'] = compute_last_n_win_rate(fights_with_elo, 'opponent_id', 'date', 'label', n=10)
+fights_with_elo['last10_win_rate_diff'] = fights_with_elo['f_last10_win_rate'] - fights_with_elo['o_last10_win_rate']
+
 # ---------------------------------------------------------------
 # 6.  TEMPORAL TRAIN / TEST SPLIT  (adjust cutoff as needed)
 cutoff = pd.Timestamp("2022-01-01")
@@ -316,17 +336,19 @@ imputer  = SimpleImputer(strategy="median")
 fights_with_elo[num_cols] = imputer.fit_transform(fights_with_elo[num_cols])
 
 # --- Add new features to feature_cols ---
-feature_cols = [
-    'f_height', 'f_weight', 'f_reach', 'f_stance', 'f_dob',
-    'o_height', 'o_weight', 'o_reach', 'o_stance', 'o_dob'
-    # Add engineered features like win_rate_diff, reach_diff, etc.
-]
-feature_cols += ["f_days_since", "o_days_since", "f_win_streak5", "o_win_streak5"]
-feature_cols += [
-    'is_title_fight',
-    'f_finish_rate', 'f_ko_rate', 'f_sub_rate', 'f_total_fights',
-    'o_finish_rate', 'o_ko_rate', 'o_sub_rate', 'o_total_fights'
-]
+# feature_cols = [
+#     'f_height', 'f_weight', 'f_reach', 'f_stance', 'f_age',
+#     'o_height', 'o_weight', 'o_reach', 'o_stance', 'o_age',
+#     'f_win_rate', 'o_win_rate', 'win_rate_diff',
+#     'f_last10_win_rate', 'o_last10_win_rate', 'last10_win_rate_diff',
+# ]
+# feature_cols += ["f_days_since", "o_days_since", "f_win_streak5", "o_win_streak5"]
+# feature_cols += [
+#     'is_title_fight',
+#     'f_finish_rate', 'f_ko_rate', 'f_sub_rate', 'f_total_fights',
+#     'o_finish_rate', 'o_ko_rate', 'o_sub_rate', 'o_total_fights'
+# ]
+# feature_cols += ["f_last10_win_rate", "o_last10_win_rate", "last10_win_rate_diff"]
 
 # Drop rows with missing features
 train = train.dropna(subset=feature_cols)
@@ -344,16 +366,8 @@ def compute_age(dob, fight_date):
         return (fight_date - dob).days / 365.25
     except:
         return None
-
-train['f_age'] = train.apply(lambda row: compute_age(row['f_dob'], row['date']), axis=1)
-train['o_age'] = train.apply(lambda row: compute_age(row['o_dob'], row['date']), axis=1)
-test['f_age'] = test.apply(lambda row: compute_age(row['f_dob'], row['date']), axis=1)
-test['o_age'] = test.apply(lambda row: compute_age(row['o_dob'], row['date']), axis=1)
-
-feature_cols = [
-    'f_height', 'f_weight', 'f_reach', 'f_stance', 'f_age',
-    'o_height', 'o_weight', 'o_reach', 'o_stance', 'o_age'
-]
+fights_with_elo['f_age'] = fights_with_elo.apply(lambda row: compute_age(row['f_dob'], row['date']), axis=1)
+fights_with_elo['o_age'] = fights_with_elo.apply(lambda row: compute_age(row['o_dob'], row['date']), axis=1)
 
 # Drop rows with missing features again
 train = train.dropna(subset=feature_cols)
@@ -445,3 +459,42 @@ print(f"Unique fights (strict): {train_strict[['event','date','fighter_id','oppo
 print(f"Unique fighters (strict): {len(set(train_strict['fighter_id']).union(set(test_strict['fighter_id'])))}")
 print(f"Unique fights (relaxed): {train_relaxed[['event','date','fighter_id','opponent_id']].drop_duplicates().shape[0] + test_relaxed[['event','date','fighter_id','opponent_id']].drop_duplicates().shape[0]}")
 print(f"Unique fighters (relaxed): {len(set(train_relaxed['fighter_id']).union(set(test_relaxed['fighter_id'])))}") 
+
+# --- SHAP analysis for XGBoost ---
+explainer = shap.TreeExplainer(xgb_best)
+shap_values = explainer.shap_values(X_test)
+
+# Summary bar plot
+shap.summary_plot(shap_values, X_test, plot_type="bar", show=False)
+import matplotlib.pyplot as plt
+plt.tight_layout()
+plt.savefig("shap_summary_bar.png")
+plt.close()
+
+# Beeswarm plot
+shap.summary_plot(shap_values, X_test, show=False)
+plt.tight_layout()
+plt.savefig("shap_summary_beeswarm.png")
+plt.close()
+
+print("SHAP summary plots saved as 'shap_summary_bar.png' and 'shap_summary_beeswarm.png'") 
+
+import pandas as pd
+pd.set_option('display.max_rows', None)
+shap_df = pd.DataFrame({
+    'mean_abs_shap': np.abs(shap_values).mean(axis=0)
+}, index=X_test.columns).sort_values('mean_abs_shap', ascending=False)
+print("\nFull SHAP feature importance table:")
+print(shap_df)
+shap_df.to_csv('shap_feature_importance.csv')
+print("SHAP feature importance table saved as 'shap_feature_importance.csv'") 
+win_features = [
+    'f_win_rate', 'o_win_rate', 'win_rate_diff',
+    'f_last10_win_rate', 'o_last10_win_rate', 'last10_win_rate_diff'
+]
+print("\nSHAP values for win-related features:")
+print(shap_df.loc[shap_df.index.intersection(win_features)]) 
+
+from sklearn.metrics import accuracy_score
+print(f"Test AUC: {auc:.3f}")
+print(f"Test Accuracy: {accuracy_score(y_test, xgb_best.predict(X_test)):.3f}") 
